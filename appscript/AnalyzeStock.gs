@@ -3,15 +3,18 @@
  */
 function analyzeStock() {
   let currentSelectedSheetRange = SpreadsheetApp.getActiveRange();
-  let stockCode = currentSelectedSheetRange.getValue();
-  analyzeStockCode(stockCode);
+  let originalStockCode = currentSelectedSheetRange.getValue();
+  if (originalStockCode != originalStockCode.toUpperCase()) {
+    currentSelectedSheetRange.setValue(originalStockCode.toUpperCase());
+  }
+  analyzeStockCode(originalStockCode.toUpperCase());
 
   SpreadsheetApp.flush();
   //Browser.msgBox(stockCode);
 }
 
 function analyzeStock2() {
-  analyzeStockCode('MEG');
+  analyzeStockCode('PSB');
 }
 
 /**
@@ -19,13 +22,14 @@ function analyzeStock2() {
  */
 function analyzeStockCode(stockCode) {
   let activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let activeSheet = activeSpreadsheet.getActiveSheet();
   let currentPriceSheet = activeSpreadsheet.getSheetByName(SHEET_CURRENTPRICE);
 
   let stockSheet = activeSpreadsheet.getSheetByName(stockCode + '-' + SHEET_STOCKANALYZE);
   if (!stockSheet) {
     stockSheet = activeSpreadsheet.insertSheet();
     stockSheet.setName(stockCode + '-' + SHEET_STOCKANALYZE);
-    activeSpreadsheet.moveActiveSheet(currentPriceSheet.getIndex() + 1);
+    activeSpreadsheet.moveActiveSheet(activeSheet.getIndex() + 1);
     activeSpreadsheet.setActiveSheet(stockSheet);
   }
 
@@ -204,6 +208,7 @@ function loadAllTransactions_(stockCode, stockSheet, colSettings) {
   let loadResult = {};
   loadResult['LatestDivPerShare'] = null;
 
+  // Get the projected cash dividend of the stock
   for (let projDividendIndex = 0; projDividendIndex < dataProjDividend.length; projDividendIndex++) {
     let stockCode3 = dataProjDividend[projDividendIndex][COLINDEX_PROJDIV_STOCKCODE];
     if (stockCode3 != stockCode) {
@@ -231,6 +236,21 @@ function loadAllTransactions_(stockCode, stockSheet, colSettings) {
       let exDividendDate = new Date(dataCashDividend[cashDividendIndex][COLINDEX_CASHDIV_EXDIVDATE]);
       console.log('CDIndex: ' + cashDividendIndex + ' TransactDate: ' + currTransDate + ' < ExDivDate:' + exDividendDate);
       if (currTransDate.getTime() < exDividendDate.getTime()) {
+
+        // Before adding cash dividend, check if there is a projected cash dividend before it
+        if (cashDividendCount == 0 && foundProjDividendIndex > -1) {
+          if (loadResult['LatestDivPerShare'] == null) {
+            loadResult['LatestDivPerShare'] = dataProjDividend[foundProjDividendIndex][COLINDEX_PROJDIV_DIVPERSHARE];
+          }
+          let projExDividendDate = new Date(dataProjDividend[foundProjDividendIndex][COLINDEX_PROJDIV_EXDIVDATE]);
+          console.log('Proj Div, Cash Div ExDate: ' + currTransDate + ' < Proj Ex Date: ' + projExDividendDate);
+          if (exDividendDate.getTime() < projExDividendDate.getTime()) {
+            addProjectedCashDividendRow_(dataProjDividend, foundProjDividendIndex, stockSheet, colSettings, stockAnalyzeRow);
+            stockAnalyzeRow++;
+            foundProjDividendIndex = -1;
+          }
+        }
+
         if (loadResult['LatestDivPerShare'] == null) {
           loadResult['LatestDivPerShare'] = dataCashDividend[cashDividendIndex][COLINDEX_CASHDIV_DIVPERSHARE];
         }

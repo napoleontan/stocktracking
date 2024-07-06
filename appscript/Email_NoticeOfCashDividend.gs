@@ -33,7 +33,7 @@ function searchNewEmailColNoticeOfCashDividend() {
       console.log(paymentDate + ' (' + aNoticeInfo.TransactionInfo.ExDividendDate + ') ' + aNoticeInfo.TransactionInfo.StockCode);
       getCashDividendNoticeSharePrice_(latestPriceInfo, dataCurrentPrice, aNoticeInfo);
 
-      let computedAveragePrice = computeAveragePriceByStockCode(aNoticeInfo.TransactionInfo.StockCode, aNoticeInfo.TransactionInfo.ExDividendDate);
+      let computedAveragePrice = computeAveragePriceByStockCode(aNoticeInfo.TransactionInfo.StockCode, aNoticeInfo.TransactionInfo.ExDividendDate, null);
       aNoticeInfo.AverageBuyPricePerShare = computedAveragePrice.AverageBuyPricePerShare;
 
       logCashDividendNoticeToSheets_(colSettings, addToRow, aNoticeInfo, sheetCurrentPrice.getLastRow());
@@ -300,6 +300,8 @@ function checkColNoticeOfCashDividendExists_(dataCashDividend, aNoticeInfo) {
       continue;
     }
 
+console.log('found' + paymentDate + ' vs ' + formattedPaymentDate);
+console.log('found');
     return true;
   }
   return false;
@@ -450,8 +452,7 @@ function logCashDividendNoticeToSheets_(colSettings, addToRow, aNoticeInfo, curr
 
   // Sector
   cellRange = colSettings.Sector + addToRow;
-  formulaVal = "=LOOKUP(" + colSettings.StockCode + addToRow + ",CurrentPrice!$A$3:$A$" + 
-    currentPriceLastRow + ",CurrentPrice!$C$3:$C$" + currentPriceLastRow + ")";
+  formulaVal = "=VLOOKUP(" + colSettings.StockCode + addToRow + ",CurrentPrice!$A$3:$C$" + currentPriceLastRow + ",3,FALSE)";
   sheetCashDiv.getRange(cellRange).setFormula(formulaVal);
 
   cellRange = colSettings.Broker + addToRow;
@@ -463,6 +464,13 @@ function logCashDividendNoticeToSheets_(colSettings, addToRow, aNoticeInfo, curr
   cellRange = colSettings.AverageBuyDividendRate + addToRow;
   formulaVal = "=" + colSettings.DividendPerShare + addToRow + "/" + colSettings.AverageBuyPricePerShare + addToRow;
   sheetCashDiv.getRange(cellRange).setFormula(formulaVal);
+
+  cellRange = colSettings.Emailed + addToRow;
+  if (aNoticeInfo.TransactionInfo.MarkerType == -1) {
+    sheetCashDiv.getRange(cellRange).setValue('No');
+  } else {
+    sheetCashDiv.getRange(cellRange).setValue('Yes');
+  }
 
   SpreadsheetApp.flush();
 }

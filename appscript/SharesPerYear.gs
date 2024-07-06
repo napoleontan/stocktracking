@@ -321,6 +321,9 @@ function writeSharesYearlyPerformance_(stockYearlyTotalInfo) {
   }
 }
 
+/**
+ * Write the year end quantity in the stock transaction sheet
+ */
 function writeYearEndStockQuantity_(stockYearlyTotalInfo) {
 
   let colSettings = loadColumnSettings(SHEET_STOCKTRANS);

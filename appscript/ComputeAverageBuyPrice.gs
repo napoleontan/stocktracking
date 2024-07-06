@@ -1,5 +1,5 @@
 /**
- * Compute teh average buy price of all the currently owned stocks
+ * Compute the average buy price of all the currently owned stocks
  */
 var computeAverageBuyPrice = function() {
   
@@ -28,7 +28,7 @@ var computeAverageBuyPrice = function() {
     currentPriceSheet.getRange(cellRange).setBackground("yellow");
     SpreadsheetApp.flush();
     
-    let computedAveragePrice = computeAverageBuyPriceByStockCodeInternal_(stockCode1, null, dataTransTotal, datasheetStockTrans);
+    let computedAveragePrice = computeAverageBuyPriceByStockCodeInternal_(stockCode1, null, null, dataTransTotal, datasheetStockTrans);
     console.log(computedAveragePrice);
     if (computedAveragePrice.AverageBuyPricePerShare != null) {
       cellRange = colSettings.Quantity + row;
@@ -48,7 +48,7 @@ var computeAverageBuyPrice = function() {
 /**
  * Compute the average buy price of an individual stock within a said date
  */
-computeAveragePriceByStockCode = function(stockCode, cutOffDate) {
+computeAveragePriceByStockCode = function(stockCode, cutOffDate, expectedSharesOwned) {
 
   let sheetTransTotal = SpreadsheetApp.getActive().getSheetByName(SHEET_TRANSTOTAL);
   let [rows, columns] = [sheetTransTotal.getLastRow(), sheetTransTotal.getLastColumn()];
@@ -58,14 +58,14 @@ computeAveragePriceByStockCode = function(stockCode, cutOffDate) {
   [rows, columns] = [sheetStockTrans.getLastRow(), sheetStockTrans.getLastColumn()];
   let datasheetStockTrans = sheetStockTrans.getRange(3, 1, rows, columns).getValues();
 
-  return computeAverageBuyPriceByStockCodeInternal_(stockCode, cutOffDate, dataTransTotal, datasheetStockTrans);
+  return computeAverageBuyPriceByStockCodeInternal_(stockCode, cutOffDate, expectedSharesOwned, dataTransTotal, datasheetStockTrans);
 }
 
 /**
  * Internal function for computing the average buy price for a specified stocks with cutoff date
  * The date sheet is passed for performance purpose when calling this method is required for long check
  */
-computeAverageBuyPriceByStockCodeInternal_ = function(stockCode, cutOffDate, dataTransTotal, datasheetStockTrans) {
+computeAverageBuyPriceByStockCodeInternal_ = function(stockCode, cutOffDate, expectedSharesOwned, dataTransTotal, datasheetStockTrans) {
 
   let stockTotalBuyAmount = 0;
   let stockBuyQuantityCounter = 0;
@@ -74,14 +74,19 @@ computeAverageBuyPriceByStockCodeInternal_ = function(stockCode, cutOffDate, dat
 
   // Get shares owned from total
   let sharesOwned = 0;
-  for (let iRow = 0; iRow < dataTransTotal.length; iRow++) {
-    let transTotalStockCode = dataTransTotal[iRow][COLINDEX_TRANSTOTAL_STOCKCODE];
-    if (stockCode != transTotalStockCode) {
-      continue;
+  if (expectedSharesOwned === null) {
+    for (let iRow = 0; iRow < dataTransTotal.length; iRow++) {
+      let transTotalStockCode = dataTransTotal[iRow][COLINDEX_TRANSTOTAL_STOCKCODE];
+      if (stockCode != transTotalStockCode) {
+        continue;
+      }
+      sharesOwned = parseInt(dataTransTotal[iRow][COLINDEX_TRANSTOTAL_QUANTITY], 10);
+      break;
     }
-    sharesOwned = parseInt(dataTransTotal[iRow][COLINDEX_TRANSTOTAL_QUANTITY], 10);
-    break;
+  } else {
+    sharesOwned = expectedSharesOwned;
   }
+  console.log('StockCode: ' + stockCode + '. SharesOwned: ' + sharesOwned);
 
   // Loop through all stock transaction and compute average price until all is found.
   for (let iRow = 0; iRow < datasheetStockTrans.length; iRow++) {

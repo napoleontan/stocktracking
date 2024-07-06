@@ -14,30 +14,18 @@ function getFutureDividend() {
 
   let pageNo = 1;
   let allUnpaidCount = 0;
+  let oldUnpaidCount = 0;
   let pageUnpaidCount = 0;
-  let allUnpaidDividend = null;
+  let allUnpaidDividend = {};
   do {
     let dividendPageInfo = getDividendRightInfoPage_(pageNo, ownedStockInfo, allUnpaidCount);
-    let unPaidDividendInfo = filterFutureDividendUnpaidOnly_(dividendPageInfo, dividendPaidInfo, ownedStockInfo);
-    // Count the unpaid in current page
-    pageUnpaidCount = 0;
-    for (let x in unPaidDividendInfo) {
-      pageUnpaidCount++;
-    }
+    oldUnpaidCount = allUnpaidCount;
+    allUnpaidCount = filterFutureDividendUnpaidOnly_(dividendPageInfo, allUnpaidDividend, ownedStockInfo, allUnpaidCount);
+    pageUnpaidCount = allUnpaidCount - oldUnpaidCount;
 
-    if (allUnpaidDividend == null) {
-      allUnpaidCount = pageUnpaidCount;
-      allUnpaidDividend = unPaidDividendInfo;
-    } else {
-      for (unpaidKey in unPaidDividendInfo) {
-        let anUnPaidDividendInfo = unPaidDividendInfo[unpaidKey];
-        allUnpaidDividend[allUnpaidCount + 1] = anUnPaidDividendInfo;
-        allUnpaidCount++;
-      }
-    }
-    
     pageNo++;
-  } while (pageUnpaidCount > 0 && pageNo <= 10);
+    //if (pageNo > 2) break;
+  } while (/*pageUnpaidCount > 0 &&*/ pageNo <= 10);
 
   addFutureDividendExpectedToSheet_(colSettings, allUnpaidDividend, ownedStockInfo);
 }
@@ -49,27 +37,9 @@ function getFutureDividendFromBackup() {
   let colSettings = loadColumnSettings(SHEET_PROJDIV);
 
   let allUnpaidCount = 0;
-  let pageUnpaidCount = 0;
-  let allUnpaidDividend = null;
+  let allUnpaidDividend = {};
   let dividendPageInfo = getDividendRightInfoFromBackup_(ownedStockInfo);
-  let unPaidDividendInfo = filterFutureDividendUnpaidOnly_(dividendPageInfo, dividendPaidInfo, ownedStockInfo);
-  // Count the unpaid in current page
-  pageUnpaidCount = 0;
-  for (let x in unPaidDividendInfo) {
-    pageUnpaidCount++;
-  }
-
-  if (allUnpaidDividend == null) {
-    allUnpaidCount = pageUnpaidCount;
-    allUnpaidDividend = unPaidDividendInfo;
-  } else {
-    for (unpaidKey in unPaidDividendInfo) {
-      let anUnPaidDividendInfo = unPaidDividendInfo[unpaidKey];
-      allUnpaidDividend[allUnpaidCount + 1] = anUnPaidDividendInfo;
-      allUnpaidCount++;
-    }
-  }
-
+  allUnpaidCount = filterFutureDividendUnpaidOnly_(dividendPageInfo, allUnpaidDividend, ownedStockInfo, allUnpaidCount);
   addFutureDividendExpectedToSheet_(colSettings, allUnpaidDividend, ownedStockInfo);
 }
 
@@ -232,7 +202,7 @@ function getDividendRightInfoPage_(pageNo, ownedStockInfo, startIndex) {
   let responseCode = response.getResponseCode();
   console.log('getDividendRightInfoPage(pageNo:= ' + pageNo + ', startIndex:= ' + startIndex + ') ResponseCode' + response.getResponseCode());
   let html = response.getContentText();
-  console.log(html);
+  //console.log(html);
 
   if (responseCode != 200) {
     return {};
@@ -268,11 +238,14 @@ function getDividendRightInfoPage_(pageNo, ownedStockInfo, startIndex) {
     if (tdDividendRatePesoIndex > 0) {
       tdCleanDividendRate = tdCleanDividendRate.substring(tdDividendRatePesoIndex);
     }
+    //let preClean = tdCleanDividendRate;
     tdCleanDividendRate = tdCleanDividendRate.replace('Php.','');
+    tdCleanDividendRate = tdCleanDividendRate.replace('PhP.','');
     tdCleanDividendRate = tdCleanDividendRate.replace('PHP','');
     tdCleanDividendRate = tdCleanDividendRate.replace('Php','');
     tdCleanDividendRate = tdCleanDividendRate.replace('PhP','');
     tdCleanDividendRate = tdCleanDividendRate.replace('P','');
+    //console.log('PreClean DivRate: [' + preClean + '] post clean [' + tdCleanDividendRate + ']');
 
     let tdDividendRateSlashIndex = tdCleanDividendRate.indexOf('/');
     if (tdDividendRateSlashIndex > 0) {
@@ -317,7 +290,7 @@ function getDividendRightInfoPage_(pageNo, ownedStockInfo, startIndex) {
       // Then just try to match dividend rights info to the company code only
       if (foundStockCode == '') {
         for (let keyStockCode in ownedStockInfo) {
-          if (ownedStockInfo[keyStockCode].CompanyId == tdCompanyCode && tdSecurityTypeCode == 'COMMON') {
+          if (ownedStockInfo[keyStockCode].CompanyId == tdCompanyCode && tdCompanyCode != '86' && tdSecurityTypeCode == 'COMMON') {
             //console.log('TD2.1: ' + tdCompanyCode);
             //console.log('StockCode: ' + keyStockCode);
             foundStockCode = keyStockCode;
@@ -333,6 +306,9 @@ function getDividendRightInfoPage_(pageNo, ownedStockInfo, startIndex) {
         rowDictData['StockCode'] = foundStockCode;
         rowDictData['DividendPerShare'] = tdCleanDividendRate;
         rowDictData['ExDividendDate'] = Utilities.formatDate(new Date(tdDividendExDate), 'Asia/Tokyo', 'yyyy-MM-dd');
+        if (tdDividendExDate == '' && tdPaymentDate != '') {
+          rowDictData['ExDividendDate'] = Utilities.formatDate(new Date(tdPaymentDate), 'Asia/Tokyo', 'yyyy-MM-dd');
+        }
         rowDictData['RecordDate'] = Utilities.formatDate(new Date(tdRecordDate), 'Asia/Tokyo', 'yyyy-MM-dd');
         rowDictData['PaymentDate'] = Utilities.formatDate(new Date(tdPaymentDate), 'Asia/Tokyo', 'yyyy-MM-dd');
         dict_data[foundDataIndex + 1] = rowDictData;
@@ -423,67 +399,67 @@ function getDividendRightInfoFromBackup_(ownedStockInfo) {
  *   - this has limitation but will go away through time once a share has first paid dividend
  * - If the stock is previously paid before, check the ex dividend date and compare if it is after the last paid ex dividend date
  */
-function filterFutureDividendUnpaidOnly_(dividendPageInfo, dividendPaidInfo, ownedStockInfo) {
+function filterFutureDividendUnpaidOnly_(dividendPageInfo, allUnpaidDividend, ownedStockInfo, allUnpaidDividendSize) {
   let rowDictData = {};
-  let unpaidDividendIndex = 0;
+  let unpaidDividendIndex = allUnpaidDividendSize;
   let nonTargetDividendCounter = 0;
-  for (let keyPageIndex in dividendPageInfo) {
-    let aDividendPageInfo = dividendPageInfo[keyPageIndex];
 
-    let nonTargetDividendInfo = null;
-    /*
-    for (let keyPaidIndex in dividendPaidInfo) {
-      let aDividendPaidInfo = dividendPaidInfo[keyPaidIndex];
+  for (let keyDividendPageIndex in dividendPageInfo) {
+    let aDividendPageInfo = dividendPageInfo[keyDividendPageIndex];
+    let pageInfoExDividendDate = new Date(aDividendPageInfo.ExDividendDate);
+    //console.log('Last Paid: ' + lastPaidExDividendDate);
 
-      if (aDividendPageInfo.StockCode == aDividendPaidInfo.StockCode && aDividendPageInfo.ExDividendDate == aDividendPaidInfo.ExDividendDate) {
-        nonTargetDividendInfo = aDividendPaidInfo;
-        break;
-      }
-    }
-    */
-
-    //console.log('>>> ' + aDividendPageInfo.StockCode);
-    //console.log('>>>LastPaidExDividedDate: ' + ownedStockInfo[aDividendPageInfo.StockCode].LastPaidExDividedDate);
-    //console.log('>>>ToBePaidExDividedDate: ' + ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate);
-    //console.log('>>>ExDividendDate ' + aDividendPageInfo.ExDividendDate);
-
+    // An old dividend info, there was a paid value already
     if (ownedStockInfo[aDividendPageInfo.StockCode].LastPaidExDividedDate != null) {
-      // If stock previously owned and was paid before we will use it as judgement if stock already paid
-      let dividendDate = new Date(aDividendPageInfo.ExDividendDate);
-      let lastPaidDividendDate = new Date(ownedStockInfo[aDividendPageInfo.StockCode].LastPaidExDividedDate);
-      if (dividendDate.valueOf() <= lastPaidDividendDate.valueOf()) {
-        // comment for DEBUG only, uncomment below again!!!
-        //nonTargetDividendInfo = aDividendPageInfo;
+      let lastPaidExDividendDate = new Date(ownedStockInfo[aDividendPageInfo.StockCode].LastPaidExDividedDate);
+      if (pageInfoExDividendDate.getTime() < lastPaidExDividendDate.getTime()) {
+        continue;
       }
-    } 
+    }
+    if (ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate != null) {
+      let toBePaidExDividendDate = new Date(ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate);
+      if (pageInfoExDividendDate.getTime() < toBePaidExDividendDate.getTime()) {
+        continue;
+      }
+    }
 
-    if (nonTargetDividendInfo == null) {
-      // totally new owned stock, we will check if a dividend pay date was found, only first one is considered 
-      if (ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate != null) {
-        let dividendDate = new Date(aDividendPageInfo.ExDividendDate);
-        let toBePaidDividendDate = new Date(ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate);
-        if (dividendDate.valueOf() <= toBePaidDividendDate.valueOf()) {
-          nonTargetDividendInfo = aDividendPageInfo;
-          //console.log('>>> b');
+    //console.log('page info ' + JSON.stringify(aDividendPageInfo));
+    let alreadyFoundUnpaidDividendInfo = false;
+    for (let keyAllUnpaidIndex in allUnpaidDividend) {
+      let theAllUnpaidDividendInfo = allUnpaidDividend[keyAllUnpaidIndex];
+      let theAllUnpaidExDividendDate = new Date(theAllUnpaidDividendInfo.ExDividendDate);
+
+      if (aDividendPageInfo.StockCode == theAllUnpaidDividendInfo.StockCode) {
+      //console.log('>>> unpaid loop index=' + keyAllUnpaidIndex + ' ' + JSON.stringify(theAllUnpaidDividendInfo));
+      //console.log('>>> exDate ' + pageInfoExDividendDate.valueOf() + ' vs ' + theAllUnpaidExDividendDate.valueOf());
+        alreadyFoundUnpaidDividendInfo = true;
+        if (pageInfoExDividendDate.valueOf() < theAllUnpaidExDividendDate.valueOf()) {
+          // Several advance dividend were announced only use the nearest one
+          // override to use new didivend info
+          allUnpaidDividend[keyAllUnpaidIndex] = aDividendPageInfo;
+          //console.log('))) Replace Unpaid ' + aDividendPageInfo.StockCode);
+        } else if (pageInfoExDividendDate.valueOf() == theAllUnpaidExDividendDate.valueOf()) {
+          // Same date but multiple line were declared (regular + special dividend declaration were done, merge)
+          // Increment the dividend per share
+          allUnpaidDividend[keyAllUnpaidIndex].DividendPerShare = parseFloat(allUnpaidDividend[keyAllUnpaidIndex].DividendPerShare) +  parseFloat(aDividendPageInfo.DividendPerShare);
+          //console.log('))) Increment Unpaid ' + aDividendPageInfo.StockCode + ' to ' + allUnpaidDividend[keyAllUnpaidIndex].DividendPerShare);
         }
-      } else {
-          ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate = aDividendPageInfo.ExDividendDate;
-          //console.log('>>> c');
+      }
+    } // end for
+
+    if (alreadyFoundUnpaidDividendInfo == false) {
+      // totally new stock code, add to unpaid
+      unpaidDividendIndex++;
+      allUnpaidDividend[unpaidDividendIndex] = aDividendPageInfo;
+      //console.log('))) New Unpaid ' + aDividendPageInfo.StockCode);
+
+      if (ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate == null) {
+        ownedStockInfo[aDividendPageInfo.StockCode].ToBePaidExDividedDate = allUnpaidDividend[unpaidDividendIndex].ExDividendDate;
       }
     }
 
-    // Only include unpaid
-    if (nonTargetDividendInfo == null) {
-      rowDictData[unpaidDividendIndex + 1] = aDividendPageInfo;
-      console.log('To Be Received Dividend ' + aDividendPageInfo.ExDividendDate + ' ' + aDividendPageInfo.StockCode);
-      unpaidDividendIndex++;
-    } else {
-      nonTargetDividendCounter++;
-    }
-  }
-
-  console.log('Found ' + nonTargetDividendCounter + ' non target (to be paid) dividend Info');
-  return rowDictData;
+  } // end for
+  return unpaidDividendIndex;
 }
 
 /**
@@ -492,6 +468,8 @@ function filterFutureDividendUnpaidOnly_(dividendPageInfo, dividendPaidInfo, own
  * - Also add summation formula to total certain columns
  */
 function addFutureDividendExpectedToSheet_(colSettings, futureDividendInfo, ownedStockInfo) {
+
+  getCashDividendEntitledQuantity_(futureDividendInfo, ownedStockInfo);
 
   // Clear the previous generated projeccted dividend info
   let sheetProjectedDividend = SpreadsheetApp.getActive().getSheetByName(SHEET_PROJDIV);
@@ -518,7 +496,8 @@ function addFutureDividendExpectedToSheet_(colSettings, futureDividendInfo, owne
     cellRange = colSettings.DividendPerShare + rowIndex;
     sheetProjectedDividend.getRange(cellRange).setValue(aFutureDividendInfo.DividendPerShare);
     cellRange = colSettings.Quantity + rowIndex;
-    sheetProjectedDividend.getRange(cellRange).setValue(ownedStockInfo[aFutureDividendInfo.StockCode].ShareOwned);
+    //sheetProjectedDividend.getRange(cellRange).setValue(ownedStockInfo[aFutureDividendInfo.StockCode].ShareOwned);
+    sheetProjectedDividend.getRange(cellRange).setValue(aFutureDividendInfo.EntitledQty);
 
     cellRange = colSettings.GrossAmount + rowIndex;
     formulaVal = "=" + colSettings.DividendPerShare + rowIndex + "*" + colSettings.Quantity + rowIndex;
@@ -555,4 +534,46 @@ function addFutureDividendExpectedToSheet_(colSettings, futureDividendInfo, owne
     formulaVal = "=SUM(" + colSettings.MarketPrice + "3:" + colSettings.MarketPrice + rowIndex + ")";
     sheetProjectedDividend.getRange(cellRange).setFormula(formulaVal);
   }
+}
+
+function getCashDividendEntitledQuantity_(futureDividendInfo, ownedStockInfo) {
+
+  let sheetStockTrans = SpreadsheetApp.getActive().getSheetByName(SHEET_STOCKTRANS);
+  let [rows, columns] = [sheetStockTrans.getLastRow(), sheetStockTrans.getLastColumn()];
+  let dataStockTrans = sheetStockTrans.getRange(3, 1, rows, columns).getValues();
+
+  for (let keyDivIndex in futureDividendInfo) {
+    let aFutureDividendInfo = futureDividendInfo[keyDivIndex];
+    let entitledQty = ownedStockInfo[aFutureDividendInfo.StockCode].ShareOwned;
+    let futureExDividendDate = new Date(aFutureDividendInfo.ExDividendDate);
+    
+    console.log('Stock ' + aFutureDividendInfo.StockCode + ' owned: ' + entitledQty + ' exDate ' + aFutureDividendInfo.ExDividendDate);
+    console.log(JSON.stringify(aFutureDividendInfo));
+
+    for (let iRow = 0; iRow < dataStockTrans.length; iRow++) {
+      let stockCode = dataStockTrans[iRow][COLINDEX_STOCKTRANS_STOCKCODE];
+      let transDateText = dataStockTrans[iRow][COLINDEX_STOCKTRANS_TRANSDATE];
+      let transDate = new Date(transDateText);
+      let quantity = dataStockTrans[iRow][COLINDEX_STOCKTRANS_QUANTITY];
+      let stockTransType = dataStockTrans[iRow][COLINDEX_STOCKTRANS_TRANSTYPE];
+
+      // Stop if transact type missing
+      if (aFutureDividendInfo.StockCode != stockCode) {
+        continue;
+      }
+      console.log('match ' + transDateText)
+      if (transDate.valueOf() < futureExDividendDate.valueOf()) {
+        break;
+      }
+      if (isBuyTransactionType(stockTransType) || stockTransType == TRANSTYPE_STOCKDIVIDEND) {
+        entitledQty = entitledQty - parseInt(quantity);
+      } else if (stockTransType == TRANSTYPE_SOLDSHARES) {
+        entitledQty = entitledQty + (-1 * parseInt(quantity));
+      }
+    } // end for
+
+    console.log('Stock ' + aFutureDividendInfo.StockCode + ' entitied: ' + entitledQty);
+    aFutureDividendInfo.EntitledQty = entitledQty;
+
+  } // end for
 }

@@ -316,7 +316,8 @@ function logStockTransactionToSheets_(colSettings, addToRow, aTransactionInfo, a
     total += grossAmount;
   } else if (aTransactionInfo.TransactionType == 'SOLD') {
     netAmountCol = colSettings.NetSellAmount;
-    total += (-1 * grossAmount);
+    // The gross amount is already negative
+    total += grossAmount;
   }
   cellRange = netAmountCol + addToRow;
   sheetStockTrans.getRange(cellRange).setValue(total);
@@ -326,7 +327,7 @@ function logStockTransactionToSheets_(colSettings, addToRow, aTransactionInfo, a
   let luLastRow = sheetCurrentPrice.getLastRow();
 
   cellRange = colSettings.Sector + addToRow;
-  formulaVal = "=LOOKUP(" + colSettings.StockCode + addToRow + ",CurrentPrice!$A$3:$A$" + luLastRow + ",CurrentPrice!$C$3:$C$" + luLastRow + ")";
+  formulaVal = "=VLOOKUP(" + colSettings.StockCode + addToRow + ",CurrentPrice!$A$3:$C$" + luLastRow + ",3,FALSE)";
   sheetStockTrans.getRange(cellRange).setFormula(formulaVal);
 
   cellRange = colSettings.Broker + addToRow;
